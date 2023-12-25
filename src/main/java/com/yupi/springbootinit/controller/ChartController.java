@@ -1,4 +1,5 @@
 package com.yupi.springbootinit.controller;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -19,6 +20,7 @@ import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
 import com.yupi.springbootinit.manager.AiManager;
 import com.yupi.springbootinit.manager.RedisLimiterManager;
+import com.yupi.springbootinit.manager.WebSocketManager;
 import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
@@ -60,6 +62,9 @@ public class ChartController {
 
     @Resource
     private ThreadPoolExecutor threadPoolExecutor;
+
+    @Resource
+    private WebSocketManager webSocketManager;
 
     private final static Gson GSON = new Gson();
 
@@ -322,8 +327,13 @@ public class ChartController {
             updateChart.setId(chart.getId());
             updateChart.setStatus(StatusConstant.RUNNING);
             boolean saved = chartService.updateById(updateChart);
-            if (!saved) {
+            if (saved) {
                 handleChartUpdateError(chart.getId(), "更新running状态失败");
+                try {
+                    webSocketManager.sendMessage("更新running状态失败");
+                } catch (IOException e) {
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "web连接异常");
+                }
                 return;
             }
             String genChart = aiManager.doChat(modelId, userInput.toString());
@@ -344,6 +354,11 @@ public class ChartController {
             boolean save3 = chartService.updateById(updateChartSucceed);
             if (!save3){
                 handleChartUpdateError(chart.getId(), "更新succeed状态失败");
+                try {
+                    webSocketManager.sendMessage("更新succeed状态失败");
+                } catch (IOException e) {
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "web连接异常");
+                }
                 return;
             }
         }, threadPoolExecutor);
